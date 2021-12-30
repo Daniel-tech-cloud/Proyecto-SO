@@ -2,13 +2,9 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
-
-char **seccrit1 = NULL;
-char **seccrit2 = NULL;
 int contador;
-//int aux
-
 
 typedef struct producto{
 	int seccion;
@@ -16,59 +12,50 @@ typedef struct producto{
 	int inicio;
 	int fila;
 	int limite;
-	long int numero;
-	char *compania;
-	char *mensaje;
+	char numero[10];
+	char compania[20];
+	char mensaje[250];
 
 } producto;
 
-pthread_mutex_t mutexconsumidor[2], mutexproductor[3], mutexContador;
+producto produc;
+producto seccrit1[2];
+producto seccrit2[2];
 
-static void producir(void p){
-	producto prod = *(producto *) p;
-	
-	printf("Hilo %d valor inicio %d, valor limite %d\n",prod.index, prod.inicio, prod.limite);
+pthread_mutex_t mutexConsumidor, mutexProductor, mutexContador;
+
+static void *producir (void * p) {
+    producto prod = * (producto *) p;
+    // Para saber el hilo que produce
+    printf("Hilo %d valor inicio %d, valor limite %d\n",prod.index, prod.inicio, prod.limite);
 	printf("\n");
-	for (int i = prod.inicio; i < prod.limite; ++i){		
+
+    for (int i = prod.inicio; i < prod.limite; ++i){		
 		while(1){
-			/*
-				Intentamos desbloquear la sección crítica 1
-				Retorna: 
-					0 si se pudo bloquear
-					1 si no se pudo bloquear
-			*/
-		 	
-			 /*Sección crítica uno */
-			
-			
-			if(!pthread_mutex_trylock(&mutexproductor[0])){
-				prod.fila = 1;
-				prod.compania = malloc(sizeof(char) * 20);
-				prod.compania = "Prueba";
-				prod.numero = 5524905676;
-				printf("Número: ");
+			if(!pthread_mutex_trylock(&mutexProductor)){
+				// Compañia y teléfono
+				strcpy(produc.compania, "Telcel");
+				strcpy(produc.numero, "5524905676");
+				
+				printf("Mensaje: %s", produc.mensaje);
+				printf("Número: %s", produc.numero);
 				printf("\n");
-				//scanf("%d", &prod.numero);
-				printf("Compania: ");
+				printf("Compañía: %s", produc.compania);
 				printf("\n");
-				//printf("Holaaa");
-				//fgets(prod.compania, 10, stdin);
-				// 
-				seccrit1 = (char**)prod.numero;
-				seccrit1 = (char**)prod.compania;
-				printf("Numero: %ld compania: %s", prod.numero, prod.compania);
-				printf("\n");
-				pthread_mutex_unlock(&mutexconsumidor[0]);
+				// seccrit1[0] = prod.valor;
+				// printf("El hilo %d produjo  el valor %d\n", prod.index, seccrit1);
+				
+				pthread_mutex_unlock(&mutexConsumidor);
 				break;
-			}
-			else if(!pthread_mutex_trylock(&mutexproductor[1])) {	
-				prod.mensaje = malloc(sizeof(char) * 20);
-				fgets(prod.mensaje, 20, stdin);
-				prod.fila = 2;			
-				seccrit2 = (char**)prod.mensaje;
+			}else{
+				pthread_mutex_trylock(&mutexProductor);
+				// Mensaje
+				strcpy(produc.mensaje, "Este es un mensaje");
+				printf("Mensaje: %s", produc.mensaje);
 				printf("\n");
-				printf("Mensaje: %s", prod.mensaje);
-				pthread_mutex_unlock(&mutexconsumidor[1]);
+				// seccrit2[0] = prod.valor;
+				// printf("El hilo %d produjo  el valor %d\n", prod.index, seccrit2);
+				pthread_mutex_unlock(&mutexConsumidor);
 				break;
 			}
 		}
@@ -80,24 +67,23 @@ static void consumir(void p){
 	producto prod = *(producto *) p;
 	while(1){
 		while(1){
-			if(!pthread_mutex_trylock(&mutexconsumidor[0])){
-				//prod.seccion=1;
-				printf("Consumidor: %d numero leido: %ld compañía: %s Leido de la fila %d en la sección critica 1", prod.index, prod.numero, prod.compania, prod.fila);
-				printf("\n");
+			if(!pthread_mutex_trylock(&mutexConsumidor)){
+                // Leeremos la sección crítica 1
+				// printf("el hilo %d consumio el valor %d\n", prod.index,seccrit1);
 				pthread_mutex_lock(&mutexContador);
 				contador++;
 				pthread_mutex_unlock(&mutexContador);
-				pthread_mutex_unlock(&mutexproductor[0]);
+				pthread_mutex_unlock(&mutexProductor);
 				
 				break;
-			}else if (!pthread_mutex_trylock(&mutexconsumidor[1])){
-				//prod.seccion = 2;
-				printf("Consumidor: %d numero leido: %ld compañía: %s Leido de la fila %d en la sección critica 2", prod.index, prod.numero, prod.compania, prod.fila);
-			    printf("\n");
+			}else{
+				pthread_mutex_lock(&mutexConsumidor);
+                // Leeremos la sección crítica 2
+				// printf("el hilo %d consumio el valor %d\n", prod.index,seccrit2);
 				pthread_mutex_lock(&mutexContador);
 				contador++;
 				pthread_mutex_unlock(&mutexContador);
-				pthread_mutex_unlock(&mutexproductor[1]);
+				pthread_mutex_unlock(&mutexProductor);
 				
 				break;
 			}
@@ -105,13 +91,10 @@ static void consumir(void p){
 		}
 		pthread_mutex_lock(&mutexContador);
 		if(contador >= prod.limite){
-			/*pthread_mutex_unlock(&mutexproductor[0]);
-			pthread_mutex_unlock(&mutexproductor[1]);
-			pthread_mutex_unlock(&mutexContador);
 
-			pthread_mutex_unlock(&mutexconsumidor[0]);
-
-			pthread_mutex_unlock(&mutexconsumidor[1]);*/
+			pthread_mutex_unlock(&mutexProductor);
+			pthread_mutex_unlock(&mutexContador);		
+			pthread_mutex_unlock(&mutexConsumidor);
 			break;
 		}
 		pthread_mutex_unlock(&mutexContador);
@@ -120,12 +103,10 @@ static void consumir(void p){
 	pthread_exit(0);
 }
 
+// main
 int main(){
+	
 	//Variables
-	seccrit1 = (char **) malloc (2 * sizeof(char *));
-	seccrit2 = (char **) malloc (2 * sizeof(char *));
-	//seccrit1 = malloc(sizeof(char) * 128);
-	//seccrit2 = malloc(sizeof(char) * 128);
 	pthread_t hiloproductor[3], hiloconsumidor[2];
 	producto p[3];
 	producto m[2];
@@ -133,19 +114,17 @@ int main(){
 	contador = 0;
 
 	//Inicializamos los mutex
-	pthread_mutex_init(&mutexconsumidor[0], NULL);
-	pthread_mutex_init(&mutexproductor[0], NULL);
-	pthread_mutex_init(&mutexconsumidor[1], NULL);
-	pthread_mutex_init(&mutexproductor[1], NULL);
+	pthread_mutex_init(&mutexConsumidor, NULL);
+	pthread_mutex_init(&mutexProductor, NULL);
 	pthread_mutex_init(&mutexContador, NULL);
 
 	//Cerramos los mutex
-	pthread_mutex_lock(&mutexconsumidor[0]);
-	pthread_mutex_lock(&mutexconsumidor[1]);
+	pthread_mutex_lock(&mutexConsumidor);
+	pthread_mutex_lock(&mutexProductor);
 
-	int cantidadPorProductor = 3;
+	int cantidadPorProductor = 0;
 	int cantidadPorConsumidor = 0;
-	printf("Cantidad: ");
+
 	scanf("%d", &cantidadPorProductor);
 
 	cantidadPorConsumidor = cantidadPorProductor * 3;
@@ -155,7 +134,8 @@ int main(){
 		p[i].index = i+1;
 		p[i].inicio = 0;
 		p[i].limite = cantidadPorProductor;
-		//p[i].valor = 11*(i+1);
+		// p[i].compania[0] = "Prueba";
+		// p[i].numero[0]= "5524905676";
 
 		pthread_create(&hiloproductor[i], NULL, producir, (void *) &p[i]);
 
@@ -176,8 +156,6 @@ int main(){
 		pthread_join(hiloconsumidor[i], NULL);
 
 	//Se destruyen los mutex
-	pthread_mutex_destroy(&mutexconsumidor[0]);
-	pthread_mutex_destroy(&mutexproductor[0]);
-	pthread_mutex_destroy(&mutexconsumidor[1]);
-	pthread_mutex_destroy(&mutexproductor[1]);
+	pthread_mutex_destroy(&mutexConsumidor);
+	pthread_mutex_destroy(&mutexProductor);
 }
